@@ -96,8 +96,9 @@ def plot_building_layout(G, save_path=None):
       - Eje Y = piso (0=PB, 1=1P, 2=2P)
       - Eje X = posición lateral (distribución automática)
     """
-    # Posicionamiento por piso
-    floor_nodes = {0: [], 1: [], 2: []}
+    # Posicionamiento por piso (detecta automaticamente los pisos presentes)
+    all_floors = sorted(set(data.get("floor", 0) for _, data in G.nodes(data=True)))
+    floor_nodes = {f: [] for f in all_floors}
     for node, data in G.nodes(data=True):
         floor_nodes[data.get("floor", 0)].append(node)
 
@@ -120,7 +121,7 @@ def plot_building_layout(G, save_path=None):
 
     labels = {n: d.get("label", n) for n, d in G.nodes(data=True)}
 
-    fig, ax = plt.subplots(figsize=(16, 10))
+    fig, ax = plt.subplots(figsize=(22, 16))
 
     nx.draw_networkx(
         G, pos, labels=labels,
@@ -133,8 +134,13 @@ def plot_building_layout(G, save_path=None):
     )
 
     # Etiquetas de piso
-    for floor, label in {0: "Planta Baja", 1: "Primer Piso", 2: "Segundo Piso"}.items():
-        ax.text(-8.5, floor * 4.0, label, fontsize=11, va="center",
+    floor_label_map = {
+        0: "Planta Baja", 1: "Primer Piso",  2: "Segundo Piso",
+        3: "Tercer Piso", 4: "Cuarto Piso",  5: "Quinto Piso",
+    }
+    for floor in all_floors:
+        label = floor_label_map.get(floor, f"Piso {floor}")
+        ax.text(-8.5, floor * 4.0, label, fontsize=10, va="center",
                 fontweight="bold", color="#2c3e50",
                 bbox=dict(boxstyle="round,pad=0.3", facecolor="#ecf0f1", alpha=0.8))
 

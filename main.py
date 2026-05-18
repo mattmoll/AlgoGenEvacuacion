@@ -116,10 +116,13 @@ RUNS = [
         "tournament_k":     3,
         "W1": 1.0, "W2": 0.5, "W3": 10.0,
         "seed":             42,
-        # Bloquea la escalera A (simula un incendio que corta esa ruta)
+        # Bloquea la escalera A completa (simula un incendio en la caja de escaleras)
         "blocked_edges":    [
+            ("STAIR_A_5F", "STAIR_A_4F"),
+            ("STAIR_A_4F", "STAIR_A_3F"),
+            ("STAIR_A_3F", "STAIR_A_2F"),
             ("STAIR_A_2F", "STAIR_A_1F"),
-            ("STAIR_A_1F", "STAIR_A_GF"),
+            ("STAIR_A_1F", "STAIR_A_0F"),
         ],
     },
 ]
