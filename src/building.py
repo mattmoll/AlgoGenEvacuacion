@@ -330,24 +330,24 @@ def build_utn_graph(blocked_edges=None):
     for floor_n in range(5, -1, -1):
         upper = f"{floor_n + 1}F"
         lower = f"{floor_n}F" if floor_n > 0 else "GF"
-        e(f"STAIR_A_{upper}", f"STAIR_A_{lower}", 5, 10)
-        e(f"STAIR_B_{upper}", f"STAIR_B_{lower}", 4, 10)
+        e(f"STAIR_A_{upper}", f"STAIR_A_{lower}", 5, 50)
+        e(f"STAIR_B_{upper}", f"STAIR_B_{lower}", 4, 50)
 
     # STAIR_A y STAIR_B continuan hasta el subsuelo
-    e("STAIR_A_GF", "STAIR_A_BF", 5, 8)
-    e("STAIR_B_GF", "STAIR_B_BF", 4, 8)
+    e("STAIR_A_GF", "STAIR_A_BF", 5, 50)
+    e("STAIR_B_GF", "STAIR_B_BF", 4, 50)
 
     # STAIR_C: descends 3P → 2P → 1P → PB (tercer nucleo pisos bajos)
     for floor_n in range(2, -1, -1):
         upper = f"{floor_n + 1}F"
         lower = f"{floor_n}F" if floor_n > 0 else "GF"
-        e(f"STAIR_C_{upper}", f"STAIR_C_{lower}", 4, 10)
+        e(f"STAIR_C_{upper}", f"STAIR_C_{lower}", 4, 50)
 
     # STAIR_C_5F (embudo): canaliza flujo de 5P hacia STAIR_A de 4P
-    e("STAIR_C_5F", "STAIR_A_4F", 4, 10)
+    e("STAIR_C_5F", "STAIR_A_4F", 4, 50)
 
     # STAIR_SUB: escalera secundaria del subsuelo sube a PB
-    e("STAIR_SUB", "STAIR_A_GF", 3, 12)
+    e("STAIR_SUB", "STAIR_A_GF", 3, 50)
 
     # ── BLOQUEO DE ARISTAS ────────────────────────────────────────────────────
     if blocked_edges:

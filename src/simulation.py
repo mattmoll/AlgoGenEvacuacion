@@ -14,7 +14,7 @@ import heapq
 from collections import defaultdict
 
 
-def simulate_evacuation(chromosome, G, sectors, routes, max_time=400):
+def simulate_evacuation(chromosome, G, sectors, routes, max_time=800):
     """
     Simula la evacuación completa del edificio dado un cromosoma.
 
