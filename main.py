@@ -118,11 +118,12 @@ RUNS = [
         "seed":             42,
         # Bloquea la escalera A completa (simula un incendio en la caja de escaleras)
         "blocked_edges":    [
+            ("STAIR_A_6F", "STAIR_A_5F"),
             ("STAIR_A_5F", "STAIR_A_4F"),
             ("STAIR_A_4F", "STAIR_A_3F"),
             ("STAIR_A_3F", "STAIR_A_2F"),
             ("STAIR_A_2F", "STAIR_A_1F"),
-            ("STAIR_A_1F", "STAIR_A_0F"),
+            ("STAIR_A_1F", "STAIR_A_GF"),
         ],
     },
 ]

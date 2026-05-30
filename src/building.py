@@ -1,9 +1,32 @@
 """
 building.py - Modelado del edificio como grafo dirigido (NetworkX).
 
-Representa la sede UTN (6 pisos) con distribucion no uniforme de aulas:
-  - Pisos 0-2 (PB, 1P, 2P): pocos sectores (secretaria, labs, biblioteca)
-  - Pisos 3-5 (3P, 4P, 5P): muchos sectores (aulas grandes de cursada)
+Edificio UTN FRBA - Sede Medrano 951 (8 niveles):
+  SUB (floor -1): 0 aulas; ~2 depositos/maestranza; Biblioteca Central (flujo ascendente critico)
+  PB  (floor  0): 0 aulas; Informes/Seguridad/Mesa de Entradas; Aula Magna
+  1P  (floor  1): 20 aulas Serie 100 (101-120); Decanato + Ing. Electrica/Electronica; Secretarias
+  2P  (floor  2): 22 aulas Serie 200 (201-222); Oficinas Ciencias Basicas; 4 Labs Computo/Sistemas
+  3P  (floor  3): 22 aulas Serie 300 (301-322); Dptpos. Especialidad + SAE; Oficina 309
+  4P  (floor  4): 12 aulas Serie 400 (401-412); Bedelia Central; Buffet + CEIT + Fotocopiadora
+  5P  (floor  5): 20 aulas Serie 500 (501-520); Boxes atencion posgrado; 2 Labs Computo
+  6P  (floor  6): 15 aulas Serie 600 (601-615); 4 of. Mantenimiento/Tecnicas; Salas maquinas/panol
+
+Salidas criticas (PB, floor 0):
+  EXIT_A: Puerta Blindex principal Medrano 951  (8 p/s)
+  EXIT_B: Porton vehicular Medrano              (5 p/s)
+  EXIT_C: Salida trasera Lavalle                (4 p/s)
+
+Dinamica destacada:
+  - Subsuelo: Biblioteca sube mientras el resto baja (flujo cruzado critico)
+  - 4P: supernodo de congestion (Bedelia + Buffet/CEIT, alta poblacion flotante)
+  - 3P: supernodo de congestion medio (SAE + Oficina 309 concentran tramites)
+  - 5P: efecto cascada (suma flujo de 6P al propio, caudal duplicado)
+
+Nucleos de escaleras:
+  STAIR_A: floors -1 a 6 (nucleo principal A)
+  STAIR_B: floors -1 a 6 (nucleo principal B)
+  STAIR_C: floors 0 a 3 (tercer nucleo pisos bajos) + STAIR_C_5F (embudo 5P)
+  STAIR_SUB: subsuelo -> PB (escalera secundaria de acceso)
 
 Atributos de nodo: population, is_exit, is_sector, label, floor
 Atributos de arista: capacity (personas/s) y travel_time (segundos)
@@ -15,22 +38,7 @@ from itertools import islice
 
 def build_utn_graph(blocked_edges=None):
     """
-    Construye el grafo dirigido del edificio UTN (6 pisos, 18 sectores, 3 salidas).
-
-    Distribucion de sectores (no uniforme por diseno):
-      PB  (floor 0): 2 sectores  - Secretaria, Lab Computo
-      1P  (floor 1): 3 sectores  - Aula 101, Biblioteca, Sala Profesores
-      2P  (floor 2): 3 sectores  - Aula 201, Aula 202, Lab Electronica
-      3P  (floor 3): 5 sectores  - Aulas 301-305  (pisos de alta densidad)
-      4P  (floor 4): 5 sectores  - Aulas 401-405
-      5P  (floor 5): 5 sectores  - Aulas 501-505 + EXIT_C (salida emergencia)
-
-    Salidas:
-      EXIT_A: Salida Principal  (5 p/s) - PB
-      EXIT_B: Salida Lateral    (3 p/s) - PB
-      EXIT_C: Salida Emergencia (2 p/s) - 5P
-
-    Escaleras A y B recorren los 6 pisos (0-5).
+    Construye el grafo dirigido del edificio UTN FRBA (8 niveles, 3 salidas).
 
     Args:
         blocked_edges: lista de tuplas (u, v) a eliminar del grafo.
@@ -47,165 +55,299 @@ def build_utn_graph(blocked_edges=None):
     def e(u, v, cap, tt):
         G.add_edge(u, v, capacity=cap, travel_time=tt)
 
-    # ── SALIDAS ───────────────────────────────────────────────────────────────
-    n("EXIT_A", label="Salida Principal",   is_exit=True, floor=0)
-    n("EXIT_B", label="Salida Lateral",     is_exit=True, floor=0)
-    n("EXIT_C", label="Salida Emergencia",  is_exit=True, floor=5)
+    # ── SALIDAS CRITICAS (PB, floor 0) ────────────────────────────────────────
+    n("EXIT_A", label="Puerta Principal Medrano 951", is_exit=True, floor=0)
+    n("EXIT_B", label="Porton Vehicular Medrano",     is_exit=True, floor=0)
+    n("EXIT_C", label="Escape Trasero Lavalle",       is_exit=True, floor=0)
 
-    # ── PLANTA BAJA (floor 0) — 2 sectores ───────────────────────────────────
-    n("HALL_GF",    label="Hall PB",            floor=0)
-    n("CORR_0F_E",  label="Corredor PB Este",   floor=0)
-    n("CORR_0F_W",  label="Corredor PB Oeste",  floor=0)
-    n("STAIR_A_0F", label="Escalera A (PB)",    floor=0)
-    n("STAIR_B_0F", label="Escalera B (PB)",    floor=0)
+    # ── SUBSUELO (floor -1) ────────────────────────────────────────────────────
+    # Sin aulas de cursada. ~2 depositos/maestranza.
+    # Biblioteca Central: unica poblacion que SUBE hacia PB (flujo ascendente critico).
+    n("CORR_BF_E",  label="Corredor SUB Este",         floor=-1)
+    n("CORR_BF_W",  label="Corredor SUB Oeste",        floor=-1)
+    n("STAIR_A_BF", label="Escalera A (SUB)",          floor=-1)
+    n("STAIR_B_BF", label="Escalera B (SUB)",          floor=-1)
+    n("STAIR_SUB",  label="Escalera Secundaria (SUB)", floor=-1)
 
-    n("S_SECRET",   population=20, is_sector=True, label="Secretaria",   floor=0)
-    n("S_LAB_COMP", population=22, is_sector=True, label="Lab. Computo", floor=0)
+    n("S_BIBLIO",   population=150, is_sector=True, label="Biblioteca Central UTN FRBA", floor=-1)
+    n("S_DEPO_SUB", population=10,  is_sector=True, label="Depositos/Maestranza",        floor=-1)
 
-    e("S_SECRET",   "CORR_0F_W", 5, 2)
-    e("S_LAB_COMP", "CORR_0F_E", 5, 3)
+    e("S_BIBLIO",   "CORR_BF_E", 5, 3)
+    e("S_DEPO_SUB", "CORR_BF_W", 3, 2)
 
-    e("CORR_0F_E", "CORR_0F_W",  6, 3)
-    e("CORR_0F_W", "CORR_0F_E",  6, 3)
-    e("CORR_0F_E", "HALL_GF",    8, 2)
-    e("CORR_0F_W", "HALL_GF",    8, 2)
-    e("CORR_0F_E", "STAIR_A_0F", 4, 2)
-    e("CORR_0F_W", "STAIR_B_0F", 4, 2)
+    e("CORR_BF_E", "CORR_BF_W",  5, 4)
+    e("CORR_BF_W", "CORR_BF_E",  5, 4)
+    e("CORR_BF_E", "STAIR_A_BF", 4, 2)
+    e("CORR_BF_W", "STAIR_B_BF", 4, 2)
+    e("CORR_BF_E", "STAIR_SUB",  3, 2)
+    e("CORR_BF_W", "STAIR_SUB",  3, 2)
 
-    e("STAIR_A_0F", "HALL_GF", 4, 2)
-    e("STAIR_B_0F", "HALL_GF", 3, 2)
-    e("STAIR_A_0F", "EXIT_B",  3, 2)
+    # ── PLANTA BAJA (floor 0) — ZONA DE SUMIDEROS FINALES ─────────────────────
+    # Sin aulas. Informes/Seguridad/Mesa de Entradas + Aula Magna.
+    # Tres salidas criticas a la via publica.
+    n("HALL_GF",    label="Hall Principal PB",   floor=0)
+    n("CORR_GF_E",  label="Corredor PB Este",    floor=0)
+    n("CORR_GF_W",  label="Corredor PB Oeste",   floor=0)
+    n("CORR_GF_C",  label="Corredor PB Central", floor=0)
+    n("STAIR_A_GF", label="Escalera A (PB)",     floor=0)
+    n("STAIR_B_GF", label="Escalera B (PB)",     floor=0)
+    n("STAIR_C_GF", label="Escalera C (PB)",     floor=0)
 
-    e("HALL_GF", "EXIT_A", 5, 1)
-    e("HALL_GF", "EXIT_B", 3, 2)
+    n("S_INFORMES",   population=15,  is_sector=True, label="Informes/Seguridad/Mesa Entrada", floor=0)
+    n("S_AULA_MAGNA", population=200, is_sector=True, label="Aula Magna",                      floor=0)
 
-    # ── PRIMER PISO (floor 1) — 3 sectores ───────────────────────────────────
-    n("CORR_1F_E",  label="Corredor 1P Este",   floor=1)
-    n("CORR_1F_W",  label="Corredor 1P Oeste",  floor=1)
-    n("STAIR_A_1F", label="Escalera A (1P)",    floor=1)
-    n("STAIR_B_1F", label="Escalera B (1P)",    floor=1)
+    e("S_INFORMES",   "CORR_GF_E", 4, 2)
+    e("S_AULA_MAGNA", "CORR_GF_C", 5, 3)
 
-    n("S_AULA_101",  population=28, is_sector=True, label="Aula 101",        floor=1)
-    n("S_BIBLIO",    population=32, is_sector=True, label="Biblioteca",       floor=1)
-    n("S_SALA_PROF", population=12, is_sector=True, label="Sala Profesores", floor=1)
+    e("CORR_GF_E", "HALL_GF",    8, 2)
+    e("CORR_GF_W", "HALL_GF",    8, 2)
+    e("CORR_GF_C", "CORR_GF_E",  6, 2)
+    e("CORR_GF_C", "CORR_GF_W",  6, 2)
+    e("CORR_GF_E", "CORR_GF_C",  6, 2)
+    e("CORR_GF_W", "CORR_GF_C",  6, 2)
 
-    e("S_AULA_101",  "CORR_1F_E", 5, 2)
-    e("S_BIBLIO",    "CORR_1F_W", 4, 3)
-    e("S_SALA_PROF", "CORR_1F_W", 3, 2)
+    e("STAIR_A_GF", "HALL_GF",    5, 2)
+    e("STAIR_B_GF", "CORR_GF_E",  4, 2)
+    e("STAIR_C_GF", "CORR_GF_W",  4, 2)
+    e("CORR_GF_E",  "STAIR_A_GF", 5, 2)
+    e("CORR_GF_E",  "STAIR_B_GF", 4, 2)
+    e("CORR_GF_W",  "STAIR_C_GF", 4, 2)
 
-    e("CORR_1F_E", "CORR_1F_W",  6, 3)
-    e("CORR_1F_W", "CORR_1F_E",  6, 3)
-    e("CORR_1F_E", "STAIR_A_1F", 4, 2)
-    e("CORR_1F_W", "STAIR_B_1F", 4, 2)
-    e("STAIR_A_1F", "CORR_1F_E", 4, 2)
-    e("STAIR_B_1F", "CORR_1F_W", 3, 2)
+    # Salidas desde Hall y corredores
+    e("HALL_GF",   "EXIT_A", 8, 1)
+    e("CORR_GF_E", "EXIT_B", 5, 2)
+    e("CORR_GF_W", "EXIT_C", 4, 2)
 
-    # ── SEGUNDO PISO (floor 2) — 3 sectores ──────────────────────────────────
-    n("CORR_2F_E",  label="Corredor 2P Este",   floor=2)
-    n("CORR_2F_W",  label="Corredor 2P Oeste",  floor=2)
-    n("STAIR_A_2F", label="Escalera A (2P)",    floor=2)
-    n("STAIR_B_2F", label="Escalera B (2P)",    floor=2)
+    # ── PRIMER PISO (floor 1) — 3 nucleos + pasillo central ───────────────────
+    # 20 aulas Serie 100 (101-120): 4 grupos x5 aulas.
+    # Decanato + Dpto. Ing. Electrica/Electronica; Oficinas de Secretarias.
+    n("CORR_1F_E",  label="Corredor 1P Este",    floor=1)
+    n("CORR_1F_W",  label="Corredor 1P Oeste",   floor=1)
+    n("CORR_1F_C",  label="Corredor 1P Central", floor=1)
+    n("STAIR_A_1F", label="Escalera A (1P)",     floor=1)
+    n("STAIR_B_1F", label="Escalera B (1P)",     floor=1)
+    n("STAIR_C_1F", label="Escalera C (1P)",     floor=1)
 
-    n("S_AULA_201",    population=32, is_sector=True, label="Aula 201",         floor=2)
-    n("S_AULA_202",    population=30, is_sector=True, label="Aula 202",         floor=2)
-    n("S_LAB_ELECTRO", population=25, is_sector=True, label="Lab. Electronica", floor=2)
+    n("S_AULAS_1F_A",  population=175, is_sector=True, label="Aulas 100s A (101-105)",    floor=1)
+    n("S_AULAS_1F_B",  population=175, is_sector=True, label="Aulas 100s B (106-110)",    floor=1)
+    n("S_AULAS_1F_C",  population=175, is_sector=True, label="Aulas 100s C (111-115)",    floor=1)
+    n("S_AULAS_1F_D",  population=175, is_sector=True, label="Aulas 100s D (116-120)",    floor=1)
+    n("S_DECANATO_1F", population=30,  is_sector=True, label="Decanato + Ing. Electrica", floor=1)
+    n("S_SECRET_1F",   population=40,  is_sector=True, label="Oficinas Secretarias",      floor=1)
 
-    e("S_AULA_201",    "CORR_2F_E", 5, 2)
-    e("S_AULA_202",    "CORR_2F_E", 5, 3)
-    e("S_LAB_ELECTRO", "CORR_2F_W", 4, 2)
+    e("S_AULAS_1F_A",  "CORR_1F_E", 6, 2)
+    e("S_AULAS_1F_B",  "CORR_1F_E", 6, 2)
+    e("S_AULAS_1F_C",  "CORR_1F_W", 6, 2)
+    e("S_AULAS_1F_D",  "CORR_1F_W", 6, 2)
+    e("S_DECANATO_1F", "CORR_1F_W", 4, 2)
+    e("S_SECRET_1F",   "CORR_1F_C", 4, 2)
 
-    e("CORR_2F_E", "CORR_2F_W",  6, 3)
-    e("CORR_2F_W", "CORR_2F_E",  6, 3)
-    e("CORR_2F_E", "STAIR_A_2F", 4, 2)
-    e("CORR_2F_W", "STAIR_B_2F", 4, 2)
-    e("STAIR_A_2F", "CORR_2F_E", 4, 2)
-    e("STAIR_B_2F", "CORR_2F_W", 3, 2)
+    e("CORR_1F_E", "CORR_1F_C",  6, 3)
+    e("CORR_1F_W", "CORR_1F_C",  6, 3)
+    e("CORR_1F_C", "CORR_1F_E",  6, 3)
+    e("CORR_1F_C", "CORR_1F_W",  6, 3)
+    e("CORR_1F_E", "STAIR_A_1F", 5, 2)
+    e("CORR_1F_W", "STAIR_B_1F", 5, 2)
+    e("CORR_1F_C", "STAIR_C_1F", 5, 2)
+    e("STAIR_A_1F", "CORR_1F_E", 5, 2)
+    e("STAIR_B_1F", "CORR_1F_W", 5, 2)
+    e("STAIR_C_1F", "CORR_1F_C", 5, 2)
 
-    # ── TERCER PISO (floor 3) — 5 sectores ───────────────────────────────────
-    n("CORR_3F_E",  label="Corredor 3P Este",   floor=3)
-    n("CORR_3F_W",  label="Corredor 3P Oeste",  floor=3)
-    n("STAIR_A_3F", label="Escalera A (3P)",    floor=3)
-    n("STAIR_B_3F", label="Escalera B (3P)",    floor=3)
+    # ── SEGUNDO PISO (floor 2) — flujo descendente continuo ───────────────────
+    # 22 aulas Serie 200 (201-222): 5 grupos. Oficinas menores Ciencias Basicas.
+    # 4 Laboratorios de Computo/Sistemas. Pasillo central recibe toda la carga superior.
+    n("CORR_2F_E",  label="Corredor 2P Este",    floor=2)
+    n("CORR_2F_W",  label="Corredor 2P Oeste",   floor=2)
+    n("CORR_2F_C",  label="Corredor 2P Central", floor=2)
+    n("STAIR_A_2F", label="Escalera A (2P)",     floor=2)
+    n("STAIR_B_2F", label="Escalera B (2P)",     floor=2)
+    n("STAIR_C_2F", label="Escalera C (2P)",     floor=2)
 
-    n("S_AULA_301", population=42, is_sector=True, label="Aula 301", floor=3)
-    n("S_AULA_302", population=42, is_sector=True, label="Aula 302", floor=3)
-    n("S_AULA_303", population=40, is_sector=True, label="Aula 303", floor=3)
-    n("S_AULA_304", population=38, is_sector=True, label="Aula 304", floor=3)
-    n("S_AULA_305", population=35, is_sector=True, label="Aula 305", floor=3)
+    n("S_AULAS_2F_A",  population=175, is_sector=True, label="Aulas 200s A (201-205)", floor=2)
+    n("S_AULAS_2F_B",  population=175, is_sector=True, label="Aulas 200s B (206-210)", floor=2)
+    n("S_AULAS_2F_C",  population=175, is_sector=True, label="Aulas 200s C (211-215)", floor=2)
+    n("S_AULAS_2F_D",  population=140, is_sector=True, label="Aulas 200s D (216-219)", floor=2)
+    n("S_AULAS_2F_E",  population=105, is_sector=True, label="Aulas 200s E (220-222)", floor=2)
+    n("S_CB_OFFICES",  population=20,  is_sector=True, label="Oficinas Ciencias Basicas", floor=2)
+    n("S_LAB_SIS_A",   population=25,  is_sector=True, label="Lab. Computo/Sistemas A",  floor=2)
+    n("S_LAB_SIS_B",   population=25,  is_sector=True, label="Lab. Computo/Sistemas B",  floor=2)
+    n("S_LAB_SIS_C",   population=25,  is_sector=True, label="Lab. Computo/Sistemas C",  floor=2)
+    n("S_LAB_SIS_D",   population=25,  is_sector=True, label="Lab. Computo/Sistemas D",  floor=2)
 
-    e("S_AULA_301", "CORR_3F_E", 6, 2)
-    e("S_AULA_302", "CORR_3F_E", 6, 3)
-    e("S_AULA_303", "CORR_3F_E", 6, 2)
-    e("S_AULA_304", "CORR_3F_W", 6, 2)
-    e("S_AULA_305", "CORR_3F_W", 6, 3)
+    e("S_AULAS_2F_A",  "CORR_2F_E", 6, 2)
+    e("S_AULAS_2F_B",  "CORR_2F_E", 6, 2)
+    e("S_AULAS_2F_C",  "CORR_2F_W", 6, 2)
+    e("S_AULAS_2F_D",  "CORR_2F_W", 6, 2)
+    e("S_AULAS_2F_E",  "CORR_2F_C", 6, 2)
+    e("S_CB_OFFICES",  "CORR_2F_W", 4, 2)
+    e("S_LAB_SIS_A",   "CORR_2F_E", 4, 3)
+    e("S_LAB_SIS_B",   "CORR_2F_E", 4, 3)
+    e("S_LAB_SIS_C",   "CORR_2F_C", 4, 3)
+    e("S_LAB_SIS_D",   "CORR_2F_C", 4, 3)
 
-    e("CORR_3F_E", "CORR_3F_W",  6, 4)
-    e("CORR_3F_W", "CORR_3F_E",  6, 4)
-    e("CORR_3F_E", "STAIR_A_3F", 4, 2)
-    e("CORR_3F_W", "STAIR_B_3F", 4, 2)
-    e("STAIR_A_3F", "CORR_3F_E", 4, 2)
-    e("STAIR_B_3F", "CORR_3F_W", 3, 2)
+    e("CORR_2F_E", "CORR_2F_C",  6, 3)
+    e("CORR_2F_W", "CORR_2F_C",  6, 3)
+    e("CORR_2F_C", "CORR_2F_E",  6, 3)
+    e("CORR_2F_C", "CORR_2F_W",  6, 3)
+    e("CORR_2F_E", "STAIR_A_2F", 5, 2)
+    e("CORR_2F_W", "STAIR_B_2F", 5, 2)
+    e("CORR_2F_C", "STAIR_C_2F", 5, 2)
+    e("STAIR_A_2F", "CORR_2F_E", 5, 2)
+    e("STAIR_B_2F", "CORR_2F_W", 5, 2)
+    e("STAIR_C_2F", "CORR_2F_C", 5, 2)
 
-    # ── CUARTO PISO (floor 4) — 5 sectores ───────────────────────────────────
-    n("CORR_4F_E",  label="Corredor 4P Este",   floor=4)
-    n("CORR_4F_W",  label="Corredor 4P Oeste",  floor=4)
-    n("STAIR_A_4F", label="Escalera A (4P)",    floor=4)
-    n("STAIR_B_4F", label="Escalera B (4P)",    floor=4)
+    # ── TERCER PISO (floor 3) — supernodo de congestion medio ─────────────────
+    # 22 aulas Serie 300 (301-322): 5 grupos. Casi todos los Departamentos de
+    # Especialidad + SAE. Oficina 309: tramites generales, hiperconcurrida.
+    n("CORR_3F_E",  label="Corredor 3P Este",    floor=3)
+    n("CORR_3F_W",  label="Corredor 3P Oeste",   floor=3)
+    n("CORR_3F_C",  label="Corredor 3P Central", floor=3)
+    n("STAIR_A_3F", label="Escalera A (3P)",     floor=3)
+    n("STAIR_B_3F", label="Escalera B (3P)",     floor=3)
+    n("STAIR_C_3F", label="Escalera C (3P)",     floor=3)
 
-    n("S_AULA_401", population=42, is_sector=True, label="Aula 401", floor=4)
-    n("S_AULA_402", population=42, is_sector=True, label="Aula 402", floor=4)
-    n("S_AULA_403", population=40, is_sector=True, label="Aula 403", floor=4)
-    n("S_AULA_404", population=38, is_sector=True, label="Aula 404", floor=4)
-    n("S_AULA_405", population=35, is_sector=True, label="Aula 405", floor=4)
+    n("S_AULAS_3F_A",  population=175, is_sector=True, label="Aulas 300s A (301-305)",    floor=3)
+    n("S_AULAS_3F_B",  population=175, is_sector=True, label="Aulas 300s B (306-310)",    floor=3)
+    n("S_AULAS_3F_C",  population=175, is_sector=True, label="Aulas 300s C (311-315)",    floor=3)
+    n("S_AULAS_3F_D",  population=140, is_sector=True, label="Aulas 300s D (316-319)",    floor=3)
+    n("S_AULAS_3F_E",  population=105, is_sector=True, label="Aulas 300s E (320-322)",    floor=3)
+    n("S_DPTPS_ESP",   population=60,  is_sector=True, label="Dptpos. Especialidad + SAE", floor=3)
+    n("S_OFIC_309",    population=60,  is_sector=True, label="Oficina 309 (tramites)",     floor=3)
 
-    e("S_AULA_401", "CORR_4F_E", 6, 2)
-    e("S_AULA_402", "CORR_4F_E", 6, 3)
-    e("S_AULA_403", "CORR_4F_E", 6, 2)
-    e("S_AULA_404", "CORR_4F_W", 6, 2)
-    e("S_AULA_405", "CORR_4F_W", 6, 3)
+    e("S_AULAS_3F_A",  "CORR_3F_E", 6, 2)
+    e("S_AULAS_3F_B",  "CORR_3F_E", 6, 2)
+    e("S_AULAS_3F_C",  "CORR_3F_W", 6, 2)
+    e("S_AULAS_3F_D",  "CORR_3F_W", 6, 2)
+    e("S_AULAS_3F_E",  "CORR_3F_C", 6, 2)
+    e("S_DPTPS_ESP",   "CORR_3F_C", 4, 2)
+    e("S_OFIC_309",    "CORR_3F_C", 4, 2)
 
-    e("CORR_4F_E", "CORR_4F_W",  6, 4)
-    e("CORR_4F_W", "CORR_4F_E",  6, 4)
-    e("CORR_4F_E", "STAIR_A_4F", 4, 2)
-    e("CORR_4F_W", "STAIR_B_4F", 4, 2)
-    e("STAIR_A_4F", "CORR_4F_E", 4, 2)
-    e("STAIR_B_4F", "CORR_4F_W", 3, 2)
+    e("CORR_3F_E", "CORR_3F_C",  6, 3)
+    e("CORR_3F_W", "CORR_3F_C",  6, 3)
+    e("CORR_3F_C", "CORR_3F_E",  6, 3)
+    e("CORR_3F_C", "CORR_3F_W",  6, 3)
+    e("CORR_3F_E", "STAIR_A_3F", 5, 2)
+    e("CORR_3F_W", "STAIR_B_3F", 5, 2)
+    e("CORR_3F_C", "STAIR_C_3F", 5, 2)
+    e("STAIR_A_3F", "CORR_3F_E", 5, 2)
+    e("STAIR_B_3F", "CORR_3F_W", 5, 2)
+    e("STAIR_C_3F", "CORR_3F_C", 5, 2)
 
-    # ── QUINTO PISO (floor 5) — 5 sectores + EXIT_C ───────────────────────────
-    n("CORR_5F_E",  label="Corredor 5P Este",   floor=5)
-    n("CORR_5F_W",  label="Corredor 5P Oeste",  floor=5)
-    n("STAIR_A_5F", label="Escalera A (5P)",    floor=5)
-    n("STAIR_B_5F", label="Escalera B (5P)",    floor=5)
+    # ── CUARTO PISO (floor 4) — supernodo de congestion superior ──────────────
+    # 12 aulas Serie 400 (401-412): 3 grupos. Bedelia Central.
+    # Buffet + CEIT + Fotocopiadora: alta poblacion flotante, cuello de botella.
+    n("CORR_4F_E",  label="Corredor 4P Este",  floor=4)
+    n("CORR_4F_W",  label="Corredor 4P Oeste", floor=4)
+    n("STAIR_A_4F", label="Escalera A (4P)",   floor=4)
+    n("STAIR_B_4F", label="Escalera B (4P)",   floor=4)
 
-    n("S_AULA_501", population=42, is_sector=True, label="Aula 501", floor=5)
-    n("S_AULA_502", population=42, is_sector=True, label="Aula 502", floor=5)
-    n("S_AULA_503", population=40, is_sector=True, label="Aula 503", floor=5)
-    n("S_AULA_504", population=38, is_sector=True, label="Aula 504", floor=5)
-    n("S_AULA_505", population=35, is_sector=True, label="Aula 505", floor=5)
+    n("S_AULAS_4F_A",  population=175, is_sector=True, label="Aulas 400s A (401-405)",       floor=4)
+    n("S_AULAS_4F_B",  population=175, is_sector=True, label="Aulas 400s B (406-410)",       floor=4)
+    n("S_AULAS_4F_C",  population=70,  is_sector=True, label="Aulas 400s C (411-412)",       floor=4)
+    n("S_BEDELIA_4F",  population=60,  is_sector=True, label="Bedelia Central",              floor=4)
+    n("S_BUFFET_CEIT", population=100, is_sector=True, label="Buffet + CEIT + Fotocopiadora", floor=4)
 
-    e("S_AULA_501", "CORR_5F_E", 6, 2)
-    e("S_AULA_502", "CORR_5F_E", 6, 3)
-    e("S_AULA_503", "CORR_5F_E", 6, 2)
-    e("S_AULA_504", "CORR_5F_W", 6, 2)
-    e("S_AULA_505", "CORR_5F_W", 6, 3)
+    e("S_AULAS_4F_A",  "CORR_4F_E", 6, 2)
+    e("S_AULAS_4F_B",  "CORR_4F_E", 6, 2)
+    e("S_AULAS_4F_C",  "CORR_4F_W", 5, 2)
+    e("S_BEDELIA_4F",  "CORR_4F_W", 4, 2)
+    e("S_BUFFET_CEIT", "CORR_4F_E", 4, 2)
 
-    e("CORR_5F_E", "CORR_5F_W",  6, 4)
-    e("CORR_5F_W", "CORR_5F_E",  6, 4)
-    e("CORR_5F_E", "STAIR_A_5F", 4, 2)
-    e("CORR_5F_W", "STAIR_B_5F", 4, 2)
-    e("STAIR_A_5F", "CORR_5F_E", 4, 2)
-    e("STAIR_B_5F", "CORR_5F_W", 3, 2)
+    e("CORR_4F_E", "CORR_4F_W",  5, 4)
+    e("CORR_4F_W", "CORR_4F_E",  5, 4)
+    e("CORR_4F_E", "STAIR_A_4F", 5, 2)
+    e("CORR_4F_W", "STAIR_B_4F", 5, 2)
+    e("STAIR_A_4F", "CORR_4F_E", 5, 2)
+    e("STAIR_B_4F", "CORR_4F_W", 5, 2)
 
-    # Salida de emergencia desde 5P
-    e("CORR_5F_E", "EXIT_C", 2, 3)
-    e("CORR_5F_W", "EXIT_C", 2, 3)
+    # ── QUINTO PISO (floor 5) — efecto cascada + 3 nucleos EMBUDO ─────────────
+    # 20 aulas Serie 500 (501-520): 4 grupos x5. Boxes de atencion (Inscripcion Posgrado).
+    # 2 Labs de Computo. El caudal se duplica al sumarse el flujo de 6P.
+    # STAIR_C_5F: tercer nucleo embudo, canaliza hacia STAIR_A_4F al descender.
+    n("CORR_5F_E",  label="Corredor 5P Este",       floor=5)
+    n("CORR_5F_W",  label="Corredor 5P Oeste",      floor=5)
+    n("CORR_5F_C",  label="Corredor 5P Central",    floor=5)
+    n("STAIR_A_5F", label="Escalera A (5P)",        floor=5)
+    n("STAIR_B_5F", label="Escalera B (5P)",        floor=5)
+    n("STAIR_C_5F", label="Escalera C/Embudo (5P)", floor=5)
 
-    # ── ESCALERAS VERTICALES (bajan: piso N -> piso N-1) ─────────────────────
-    for floor in range(4, -1, -1):
-        upper = floor + 1
-        lower = floor
-        e(f"STAIR_A_{upper}F", f"STAIR_A_{lower}F", 4, 10)
-        e(f"STAIR_B_{upper}F", f"STAIR_B_{lower}F", 3, 10)
+    n("S_AULAS_5F_A",   population=175, is_sector=True, label="Aulas 500s A (501-505)",  floor=5)
+    n("S_AULAS_5F_B",   population=175, is_sector=True, label="Aulas 500s B (506-510)",  floor=5)
+    n("S_AULAS_5F_C",   population=175, is_sector=True, label="Aulas 500s C (511-515)",  floor=5)
+    n("S_AULAS_5F_D",   population=175, is_sector=True, label="Aulas 500s D (516-520)",  floor=5)
+    n("S_BOXES_5F",     population=30,  is_sector=True, label="Boxes Inscripcion Posgrado", floor=5)
+    n("S_LAB_COMP5F_A", population=25,  is_sector=True, label="Lab. Computo Posgrado A", floor=5)
+    n("S_LAB_COMP5F_B", population=25,  is_sector=True, label="Lab. Computo Posgrado B", floor=5)
+
+    e("S_AULAS_5F_A",   "CORR_5F_E", 6, 2)
+    e("S_AULAS_5F_B",   "CORR_5F_E", 6, 2)
+    e("S_AULAS_5F_C",   "CORR_5F_W", 6, 2)
+    e("S_AULAS_5F_D",   "CORR_5F_W", 6, 2)
+    e("S_BOXES_5F",     "CORR_5F_C", 4, 2)
+    e("S_LAB_COMP5F_A", "CORR_5F_E", 4, 3)
+    e("S_LAB_COMP5F_B", "CORR_5F_C", 4, 3)
+
+    e("CORR_5F_E", "CORR_5F_C",  6, 3)
+    e("CORR_5F_W", "CORR_5F_C",  6, 3)
+    e("CORR_5F_C", "CORR_5F_E",  6, 3)
+    e("CORR_5F_C", "CORR_5F_W",  6, 3)
+    e("CORR_5F_E", "STAIR_A_5F", 5, 2)
+    e("CORR_5F_W", "STAIR_B_5F", 5, 2)
+    e("CORR_5F_C", "STAIR_C_5F", 5, 2)
+    e("STAIR_A_5F", "CORR_5F_E", 5, 2)
+    e("STAIR_B_5F", "CORR_5F_W", 5, 2)
+    e("STAIR_C_5F", "CORR_5F_C", 5, 2)
+
+    # ── SEXTO PISO (floor 6) — inicio del flujo, descenso puro ───────────────
+    # 15 aulas Serie 600 (601-615): 3 grupos x5. 4 of. Mantenimiento/Tecnicas.
+    # Salas de maquinas y panol. Solo desciende por escaleras hacia 5P.
+    n("CORR_6F_E",  label="Corredor 6P Este",  floor=6)
+    n("CORR_6F_W",  label="Corredor 6P Oeste", floor=6)
+    n("STAIR_A_6F", label="Escalera A (6P)",   floor=6)
+    n("STAIR_B_6F", label="Escalera B (6P)",   floor=6)
+
+    n("S_AULAS_6F_A",  population=175, is_sector=True, label="Aulas 600s A (601-605)",       floor=6)
+    n("S_AULAS_6F_B",  population=175, is_sector=True, label="Aulas 600s B (606-610)",       floor=6)
+    n("S_AULAS_6F_C",  population=175, is_sector=True, label="Aulas 600s C (611-615)",       floor=6)
+    n("S_TECNICAS_6F", population=20,  is_sector=True, label="Of. Mantenimiento/Tecnicas",   floor=6)
+    n("S_LAB_MAQUI",   population=10,  is_sector=True, label="Salas Maquinas/Panel",        floor=6)
+
+    e("S_AULAS_6F_A",  "CORR_6F_E", 6, 2)
+    e("S_AULAS_6F_B",  "CORR_6F_W", 6, 2)
+    e("S_AULAS_6F_C",  "CORR_6F_E", 6, 2)
+    e("S_TECNICAS_6F", "CORR_6F_W", 4, 2)
+    e("S_LAB_MAQUI",   "CORR_6F_W", 3, 3)
+
+    e("CORR_6F_E", "CORR_6F_W",  5, 4)
+    e("CORR_6F_W", "CORR_6F_E",  5, 4)
+    e("CORR_6F_E", "STAIR_A_6F", 5, 2)
+    e("CORR_6F_W", "STAIR_B_6F", 5, 2)
+    e("STAIR_A_6F", "CORR_6F_E", 5, 2)
+    e("STAIR_B_6F", "CORR_6F_W", 5, 2)
+
+    # ── ESCALERAS VERTICALES ──────────────────────────────────────────────────
+    # STAIR_A y STAIR_B: descienden 6P → 5P → ... → 1P → PB → SUB
+    for floor_n in range(5, -1, -1):
+        upper = f"{floor_n + 1}F"
+        lower = f"{floor_n}F" if floor_n > 0 else "GF"
+        e(f"STAIR_A_{upper}", f"STAIR_A_{lower}", 5, 10)
+        e(f"STAIR_B_{upper}", f"STAIR_B_{lower}", 4, 10)
+
+    # STAIR_A y STAIR_B continuan hasta el subsuelo
+    e("STAIR_A_GF", "STAIR_A_BF", 5, 8)
+    e("STAIR_B_GF", "STAIR_B_BF", 4, 8)
+
+    # STAIR_C: descends 3P → 2P → 1P → PB (tercer nucleo pisos bajos)
+    for floor_n in range(2, -1, -1):
+        upper = f"{floor_n + 1}F"
+        lower = f"{floor_n}F" if floor_n > 0 else "GF"
+        e(f"STAIR_C_{upper}", f"STAIR_C_{lower}", 4, 10)
+
+    # STAIR_C_5F (embudo): canaliza flujo de 5P hacia STAIR_A de 4P
+    e("STAIR_C_5F", "STAIR_A_4F", 4, 10)
+
+    # STAIR_SUB: escalera secundaria del subsuelo sube a PB
+    e("STAIR_SUB", "STAIR_A_GF", 3, 12)
 
     # ── BLOQUEO DE ARISTAS ────────────────────────────────────────────────────
     if blocked_edges:
@@ -226,7 +368,7 @@ def get_sectors(G):
     return [n for n, d in G.nodes(data=True) if d.get("is_sector")]
 
 
-def precompute_routes(G, max_routes_per_sector=5, cutoff=14):
+def precompute_routes(G, max_routes_per_sector=5, cutoff=20):
     """
     Para cada sector, precomputa hasta max_routes_per_sector caminos validos
     hacia cualquier salida, ordenados de menor a mayor tiempo de viaje.
@@ -234,7 +376,7 @@ def precompute_routes(G, max_routes_per_sector=5, cutoff=14):
     Args:
         G: grafo del edificio
         max_routes_per_sector: numero maximo de rutas a guardar por sector
-        cutoff: longitud maxima de caminos en aristas (14 cubre 5P -> EXIT_A)
+        cutoff: longitud maxima de caminos en aristas (20 cubre 6P -> EXIT_A)
 
     Returns:
         dict {sector_id: [path_list_1, path_list_2, ...]}
@@ -296,7 +438,7 @@ def building_summary(G, routes):
     total_pop = sum(G.nodes[s]["population"] for s in sectors)
 
     print("=" * 65)
-    print("RESUMEN DEL EDIFICIO (6 pisos, distribucion no uniforme)")
+    print("RESUMEN DEL EDIFICIO UTN FRBA — Sede Medrano 951")
     print("=" * 65)
     print(f"  Sectores:        {len(sectors)}")
     print(f"  Salidas:         {len(exits)}  -> {[G.nodes[ex]['label'] for ex in exits]}")
@@ -305,7 +447,16 @@ def building_summary(G, routes):
     print(f"  Poblacion total: {total_pop} personas")
     print()
 
-    floor_labels = {0: "PB", 1: "1P", 2: "2P", 3: "3P", 4: "4P", 5: "5P"}
+    floor_labels = {
+        -1: "SUB",
+         0: "PB",
+         1: "1P",
+         2: "2P",
+         3: "3P",
+         4: "4P",
+         5: "5P",
+         6: "6P",
+    }
     for floor_n in sorted(floor_labels.keys()):
         floor_sectors = [s for s in sectors if G.nodes[s]["floor"] == floor_n]
         if not floor_sectors:
@@ -317,7 +468,7 @@ def building_summary(G, routes):
             pop = G.nodes[s]["population"]
             r_count = len(routes[s])
             times = [route_travel_time(r, G) for r in routes[s]]
-            print(f"    {lbl:<24} ({pop:3d}p)  {r_count} rutas  "
+            print(f"    {lbl:<32} ({pop:3d}p)  {r_count} rutas  "
                   f"[tt min={min(times)}s, max={max(times)}s]")
 
     print("=" * 65)
