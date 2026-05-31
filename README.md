@@ -53,12 +53,14 @@ El edificio tiene **6 pisos** con distribución **no uniforme** de sectores (ref
 
 | Piso | Sectores | Descripción |
 |------|----------|-------------|
+| SUB  | 2        | Biblioteca Central (flujo ascendente critico) |
 | PB   | 2        | Secretaría, Lab. Cómputo (pocos ocupantes, acceso directo a salidas) |
 | 1P   | 3        | Aula 101, Biblioteca, Sala Profesores |
 | 2P   | 3        | Aula 201, Aula 202, Lab. Electrónica |
 | 3P   | 5        | Aulas 301–305 (pisos de alta densidad de cursada) |
 | 4P   | 5        | Aulas 401–405 |
 | 5P   | 5        | Aulas 501–505 + Salida de Emergencia |
+| 6P   | 5        | Aulas 601-615 + Mantenimiento/Tecnicas; Salas maquinas/panol |
 
 - **23 sectores**, **792 personas** en total
 - **3 salidas**: Salida Principal (5 p/s), Salida Lateral (3 p/s), Salida de Emergencia 5P (2 p/s)
