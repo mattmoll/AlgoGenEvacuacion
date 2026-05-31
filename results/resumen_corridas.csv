@@ -1,6 +1,6 @@
 corrida,descripcion,pop_size,n_generations,mutation_rate,selection,crossover,W1,W2,W3,T_total_s,T_total_min,D_max,penalty,best_fitness,emergencia
-corrida_01_baseline,"Baseline: torneo k=3, cruce punto único, mutación 10%",80,150,0.1,tournament,single_point,1.0,0.5,10.0,87,1.45,79,0.0,0.00790514,False
-corrida_02_alta_mutacion,"Alta mutación (30%): mayor exploración, posible menor convergencia",80,150,0.3,tournament,single_point,1.0,0.5,10.0,88,1.47,79,0.0,0.00784314,False
-corrida_03_ruleta,Selección por ruleta: menor presión selectiva que torneo,80,150,0.1,roulette,single_point,1.0,0.5,10.0,90,1.5,75,0.0,0.00784314,False
-corrida_04_prioridad_densidad,W2=2.0: penaliza el doble los cuellos de botella vs. tiempo,80,150,0.1,tournament,single_point,0.5,2.0,10.0,92,1.53,74,0.0,0.00515464,False
-corrida_05_emergencia_escalera_bloqueada,"Escalera A bloqueada (incendio): pop=100, cruce uniforme, mut=15%",100,200,0.15,tournament,uniform,1.0,0.5,10.0,92,1.53,86,0.0,0.00740741,True
+corrida_01_baseline,"Baseline: torneo k=3, cruce punto único, mutación 10%",80,150,0.1,tournament,single_point,1.0,0.5,10.0,445,7.42,369,0.0,0.00158856,False
+corrida_02_alta_mutacion,"Alta mutación (30%): mayor exploración, posible menor convergencia",80,150,0.3,tournament,single_point,1.0,0.5,10.0,445,7.42,369,0.0,0.00158856,False
+corrida_03_ruleta,Selección por ruleta: menor presión selectiva que torneo,80,150,0.1,roulette,single_point,1.0,0.5,10.0,445,7.42,369,0.0,0.00158856,False
+corrida_04_prioridad_densidad,W2=2.0: penaliza el doble los cuellos de botella vs. tiempo,80,150,0.1,tournament,single_point,0.5,2.0,10.0,445,7.42,369,0.0,0.00104112,False
+corrida_05_emergencia_escalera_bloqueada,"Escalera A bloqueada (incendio): pop=100, cruce uniforme, mut=15%",100,200,0.15,tournament,uniform,1.0,0.5,10.0,476,7.93,364,0.0,0.00151976,True

@@ -135,8 +135,10 @@ def plot_building_layout(G, save_path=None):
 
     # Etiquetas de piso
     floor_label_map = {
-        0: "Planta Baja", 1: "Primer Piso",  2: "Segundo Piso",
-        3: "Tercer Piso", 4: "Cuarto Piso",  5: "Quinto Piso",
+        -1: "Subsuelo",
+         0: "Planta Baja",   1: "Primer Piso",  2: "Segundo Piso",
+         3: "Tercer Piso",   4: "Cuarto Piso",  5: "Quinto Piso",
+         6: "Sexto Piso",
     }
     for floor in all_floors:
         label = floor_label_map.get(floor, f"Piso {floor}")
